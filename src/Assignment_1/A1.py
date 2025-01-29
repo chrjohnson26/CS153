@@ -2,8 +2,6 @@ import cv2
 import numpy as np
 
 ### Question 1
-
-# TODO: Complete this function
 def load_img(impath):
     """
     Loads an image from a specified location and returns it in RGB format.
@@ -11,7 +9,7 @@ def load_img(impath):
     - impath: a string specifying the target image location.
     Returns an RGB image.
     """
-    img = cv2.imread(impath, cv2.IMREAD_COLOR)
+    img = cv2.imread(impath) # Using imread function to read image
     return img
 
 ### Question 2
