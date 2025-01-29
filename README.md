@@ -1,2 +1,2 @@
-# cs153
-Computer Vision
+# CS153
+Computer Vision at Harvey Mudd College
