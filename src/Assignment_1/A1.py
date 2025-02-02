@@ -29,12 +29,22 @@ def slice_video(basepath, start_num, frames, numpix = 1, offset = 0):
     """
     img = load_img(basepath + str(start_num) + '.png')
 
-    comp_img = np.zeros(img.shape)
+    comp_img = np.zeros(img.shape) # initialized as an empty black image
 
     [_,w,_] = img.shape
 
+    # TODO: input error check for numpix and offset
+    img_mask = img[:, :offset] # specifying the pixels due to the offset value
+    comp_img[:, :offset] = img_mask
+
     for fidx in range(frames):
-        # ... your code goes here ...
-        print('Not implemented yet!') # <-- Remove this line
+        cur_frame = start_num + fidx
+        img = load_img(basepath + str(cur_frame) + '.png') # loads cur_frame to img
+        img_mask = img[:, offset + fidx: offset + fidx + numpix]
+        comp_img[:, offset + fidx: offset + fidx + numpix] = img_mask
+
+    # TODO: fill the rest of the pixels
+    
+
 
     return comp_img.astype('uint8')
