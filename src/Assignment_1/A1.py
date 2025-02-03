@@ -10,9 +10,10 @@ def load_img(impath):
     Returns an RGB image.
     """
     img = cv2.imread(impath) # Using imread function to read image
-    return img
+    return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-### Question 2
+
+## Question 2
 
 # TODO: Complete this function
 def slice_video(basepath, start_num, frames, numpix = 1, offset = 0):    
@@ -33,18 +34,21 @@ def slice_video(basepath, start_num, frames, numpix = 1, offset = 0):
 
     [_,w,_] = img.shape
 
+    numpix = int(numpix) # flooring numpix
+
     # TODO: input error check for numpix and offset
     img_mask = img[:, :offset] # specifying the pixels due to the offset value
     comp_img[:, :offset] = img_mask
 
     for fidx in range(frames):
+        # TODO: input error check for numpix and offset
         cur_frame = start_num + fidx
         img = load_img(basepath + str(cur_frame) + '.png') # loads cur_frame to img
-        img_mask = img[:, offset + fidx: offset + fidx + numpix]
-        comp_img[:, offset + fidx: offset + fidx + numpix] = img_mask
+        img_mask = img[:, offset + numpix*fidx: offset + numpix*fidx + numpix]
+        comp_img[:, offset + numpix*fidx: offset + numpix*fidx + numpix] = img_mask
 
-    # TODO: fill the rest of the pixels
-    
-
+    img = load_img(basepath + str(start_num + frames-1) + '.png')
+    img_mask = img[:, offset + numpix*frames:]
+    comp_img[:, offset+numpix*frames:] = img_mask
 
     return comp_img.astype('uint8')
