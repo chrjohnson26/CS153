@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import math
 
 ### Question 1
 def load_img(impath):
@@ -14,8 +15,6 @@ def load_img(impath):
 
 
 ## Question 2
-
-# TODO: Complete this function
 def slice_video(basepath, start_num, frames, numpix = 1, offset = 0):    
     """
     Generates a static image by taking a slice through a video.
@@ -29,26 +28,27 @@ def slice_video(basepath, start_num, frames, numpix = 1, offset = 0):
     - comp_img: an RGB image containing the composite image created by sampling columns from each of the video frames.
     """
     img = load_img(basepath + str(start_num) + '.png')
-
     comp_img = np.zeros(img.shape) # initialized as an empty black image
-
     [_,w,_] = img.shape
 
-    numpix = int(numpix) # flooring numpix
-
-    # TODO: input error check for numpix and offset
-    img_mask = img[:, :offset] # specifying the pixels due to the offset value
+    img_mask = img[:, :offset] # specifying the pixels for the offset value
     comp_img[:, :offset] = img_mask
 
     for fidx in range(frames):
-        # TODO: input error check for numpix and offset
-        cur_frame = start_num + fidx
+        cur_frame = start_num + fidx # getting current frame
         img = load_img(basepath + str(cur_frame) + '.png') # loads cur_frame to img
-        img_mask = img[:, offset + numpix*fidx: offset + numpix*fidx + numpix]
-        comp_img[:, offset + numpix*fidx: offset + numpix*fidx + numpix] = img_mask
 
+        if (numpix*fidx + offset > w):
+            break
+        else:
+            l = offset + math.floor(numpix*fidx)    # floor the left side of the equation
+            r = offset + math.ceil(numpix*fidx) + math.ceil(numpix) # ceil the right side of the equation
+            img_mask = img[:, l:r]      # getting pixels from the current frame image using l and r
+            comp_img[:, l:r] = img_mask
+
+    # TODO: error check for overly long RHS
     img = load_img(basepath + str(start_num + frames-1) + '.png')
-    img_mask = img[:, offset + numpix*frames:]
-    comp_img[:, offset+numpix*frames:] = img_mask
+    img_mask = img[:, offset + int(numpix*frames):]
+    comp_img[:, offset+ int(numpix*frames):] = img_mask
 
     return comp_img.astype('uint8')
