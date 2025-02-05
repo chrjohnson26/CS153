@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import os.path
 import math
 
 ### Question 1
@@ -31,6 +32,8 @@ def slice_video(basepath, start_num, frames, numpix = 1, offset = 0):
     comp_img = np.zeros(img.shape) # initialized as an empty black image
     [_,w,_] = img.shape
 
+    if offset > w:
+        raise ValueError('offset value too large :(')
     img_mask = img[:, :offset] # specifying the pixels for the offset value
     comp_img[:, :offset] = img_mask
 
@@ -39,14 +42,13 @@ def slice_video(basepath, start_num, frames, numpix = 1, offset = 0):
         img = load_img(basepath + str(cur_frame) + '.png') # loads cur_frame to img
 
         if (numpix*fidx + offset > w):
-            break
-        else:
-            l = offset + math.floor(numpix*fidx)    # floor the left side of the equation
-            r = offset + math.ceil(numpix*fidx) + math.ceil(numpix) # ceil the right side of the equation
-            img_mask = img[:, l:r]      # getting pixels from the current frame image using l and r
-            comp_img[:, l:r] = img_mask
+            raise ValueError('Attempting to access pixel values outside valid range :(')
+        
+        l = offset + math.floor(numpix*fidx)    # floor the left side of the equation
+        r = offset + math.ceil(numpix*fidx) + math.ceil(numpix) # ceil the right side of the equation
+        img_mask = img[:, l:r]      # getting pixels from the current frame image using l and r
+        comp_img[:, l:r] = img_mask
 
-    # TODO: error check for overly long RHS
     img = load_img(basepath + str(start_num + frames-1) + '.png')
     img_mask = img[:, offset + int(numpix*frames):]
     comp_img[:, offset+ int(numpix*frames):] = img_mask
