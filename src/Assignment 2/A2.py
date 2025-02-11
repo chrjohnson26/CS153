@@ -53,5 +53,61 @@ def place_object(bkg_img, element, elmask, location, height):
     Returns an RGB image containing the composite output. This should *not* modify the input images, but should instead create a new image, and
     should be in 8-bit integer format.
     """
+    
+    # get background, content, mask dimensions
+    bkg_height, bkg_width, _ = bkg_img.shape
+    ele_height, ele_width, _ = element.shape
+
+    # get background, content, mask dimensions
+    bkg_height, bkg_width, _ = bkg_img.shape
+    ele_height, ele_width, _ = element.shape
+
+    # get ratio (width to height) and new element/mask dimensions
+    print(element.shape)
+    aspect_ratio = ele_width/ele_height
+    new_ele_height = int(bkg_height*height)
+    new_ele_width =  int(new_ele_height * aspect_ratio)
+
+    # resize element and mask based on the new dimensions
+    new_element = cv2.resize(element, (new_ele_width, new_ele_height))
+    new_elmask = cv2.resize(elmask,  (new_ele_width, new_ele_height))
+
+    # convert mask to three channels of identical values so we can compute the composite
+    new_elmask = cv2.cvtColor(new_elmask.astype('uint8'), cv2.COLOR_GRAY2RGB)
+    new_elmask = new_elmask / 255. 
+
+    # Calculate the location of element based on location
+    scaled_x = int(location[0] * bkg_width) 
+    scaled_y = int(location[1] * bkg_height)
+
+
+
+    # Getting the rows and cols we are imposing element/mask on the background
+    left = scaled_x - int(new_ele_width/2)
+    right = left + new_ele_width
+    bottom = scaled_y - int(new_ele_height/2)
+    top = bottom + new_ele_height 
+
+    # Calculating the element bounds
+    ele_x_start = max(0, -left)
+    ele_y_start = max(0 , -bottom)
+    ele_x_end   = min(new_ele_width, bkg_width - left)
+    ele_y_end   = min(new_ele_height, bkg_height - bottom)
+
+    # Calculating the background bounds where the element will go
+    bkg_x_start = max(0, left)
+    bkg_y_start = max(0, bottom)
+    bkg_x_end = min(bkg_width, right)
+    bkg_y_end = min(bkg_height, top)
+
+    # initialize composite image as the background
+    composite_img = bkg_img.copy()
+  
+    # linear combination of the content and background
+    # composite_img[bottom:top, left:right] = new_element * new_elmask + bkg_img[bottom:top, left:right] * (1-new_elmask)
+    print(ele_x_start, ele_x_end, ele_y_start, ele_y_end)
+    print(bkg_x_start, bkg_x_end, bkg_y_start, bkg_y_end)
+    composite_img[bkg_y_start:bkg_y_end, bkg_x_start:bkg_x_end] = new_element[ele_y_start:ele_y_end, ele_x_start:ele_x_end] * new_elmask[ele_y_start:ele_y_end, ele_x_start:ele_x_end] + bkg_img[bkg_y_start:bkg_y_end, bkg_x_start:bkg_x_end] * (1-new_elmask[ele_y_start:ele_y_end, ele_x_start:ele_x_end])
+    img_out = composite_img
 
     return img_out.astype('uint8')
