@@ -5,6 +5,7 @@
 import cv2
 import numpy as np
 import os
+import imutils as im
 
 #### Provided Functions ####
 # These functions are all provided for you. You may use them as you find useful.
@@ -154,8 +155,60 @@ def affine_insert(scene, element, elmask, eldepth, location, height,
         in all locations where the element appears.
     """
 
-    # TODO: Your Code Here
+    # Rotating image according to the hyperparameter, angle
+    element = im.rotate_bound(element, angle)
+    elmask = im.rotate_bound(elmask, angle)
+        
+    # Getting element and background shape info
+    bkg_height, bkg_width, _ = scene.shape
+    ele_height, ele_width, _ = element.shape
 
+    # Scale the image
+    aspect_ratio = ele_width/ele_height
+    new_ele_height = int(bkg_height * height)
+    new_ele_width = int(new_ele_height * aspect_ratio)
+
+    # Resize the element and elmask
+    new_element = cv2.resize(element, (new_ele_width, new_ele_height))
+    new_elmask = cv2.resize(elmask, (new_ele_width, new_ele_height))
+
+    # Computing the location
+    insert_x = int(location[0] * bkg_width)
+    insert_y = int(location[1] * bkg_height)
+
+    # Computing the col/row
+    left = insert_x - int(new_ele_width/2)
+    right = left + new_ele_width
+    bottom = insert_y - int(new_ele_height/2)
+    top = bottom + new_ele_height 
+
+    # Calculating the element bounds
+    ele_x_start = max(0, -left)
+    ele_y_start = max(0 , -bottom)
+    ele_x_end   = min(new_ele_width, bkg_width - left)
+    ele_y_end   = min(new_ele_height, bkg_height - bottom)
+
+    # Calculating the background bounds where the element will go
+    bkg_x_start = max(0, left)
+    bkg_y_start = max(0, bottom)
+    bkg_x_end = min(bkg_width, right)
+    bkg_y_end = min(bkg_height, top)
+
+    # initialize composite image as the background
+    composite_img = scene.copy()
+  
+    # linear combination of the content and background
+    print(ele_x_start, ele_x_end, ele_y_start, ele_y_end)
+    print(bkg_x_start, bkg_x_end, bkg_y_start, bkg_y_end)
+    composite_img[bkg_y_start:bkg_y_end, bkg_x_start:bkg_x_end] = new_element[ele_y_start:ele_y_end, ele_x_start:ele_x_end] * new_elmask[ele_y_start:ele_y_end, ele_x_start:ele_x_end] + scene[bkg_y_start:bkg_y_end, bkg_x_start:bkg_x_end] * (1-new_elmask[ele_y_start:ele_y_end, ele_x_start:ele_x_end])
+    out_scene = composite_img
+
+    # Post processing out_scene based on depth data
+    if eldepth != None:
+        change_coords = scene_depth < eldepth        # Indices which the scene_depth is less than eldepth
+
+
+    
     return out_scene, out_depth
 
 ##### Question 3 #####
@@ -171,3 +224,4 @@ def custom_compose():
 
 
     return out_scene
+    
