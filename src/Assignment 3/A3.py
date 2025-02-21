@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 import os
 import imutils as im
+from scipy.io import loadmat
 
 #### Provided Functions ####
 # These functions are all provided for you. You may use them as you find useful.
@@ -92,7 +93,6 @@ def pad_to_size(elimg, mask, scene, location):
     return big_img, big_mask
 
 ##### Question 1 #####
-
 def green_extract(impath):
     """
     Loads an image from a specified location and performs green screen extraction.
@@ -102,25 +102,61 @@ def green_extract(impath):
     - elements: a list of RGB images containing minimally bounded objects.
     - masks: a list of binary masks (numpy 'int' type) corresponding to the elements above
     """
-
+    
     # This code is provided to you from our code in class to get you started.
     # You may decide to only use it for some of the images if you define custom rules
     # for some of the more challenging ones.
     thresh = 50
     fact = 1.5
+    alpha = 0
+    beta = 0
+    if impath == 'imgs/test_imgs/ball_toss.png':
+        alpha = 100
+    elif impath == 'imgs/test_imgs/calden_umbrella.png':
+        thresh = 60
+        fact = 1.6
+        alpha = 30
+    elif impath == 'imgs/test_imgs/head.png' or impath == 'imgs/test_imgs/francine_poppins.png':
+        beta = 40
+        alpha = 40
+    elif impath == 'imgs/custom_imgs/crouch.jpg':
+        beta = 50
+        alpha = 40
+
 
     img = cv2.imread(impath)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     (h,w,c) = img.shape
 
-    gs_mask = np.zeros((h,w), dtype=bool)
+    # gs_mask = np.zeros((h,w), dtype=bool)
 
-    gs_mask = img[:,:,1] < fact*img[:,:,0]
-    gs_mask = np.logical_or(gs_mask, img[:,:,1] < fact*img[:,:,2])
+    gs_mask = img[:,:,1] < beta+fact*img[:,:,0]
+    gs_mask = np.logical_or(gs_mask, img[:,:,1] < alpha+fact*img[:,:,2])
     gs_mask = np.logical_or(gs_mask, img[:,:,1] < thresh)
 
-    # TODO: Any mask improvement steps and handling of multiple objects
+    # min_w, min_h, max_w, max_h=minbbox(gs_mask)
 
+    # Parameter to control the morpholgy element size (from lecture demo slides)
+    morph_size = 8
+
+    morph_kern = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (morph_size,morph_size))
+    eromask = cv2.erode(gs_mask.astype(np.uint8), morph_kern, iterations=1) # using cv2.erode to remove residuals
+    gs_mask = cv2.dilate(eromask, morph_kern, iterations=1) # using cv2 dialate function to enlarge the people
+
+
+    # Finding the connected components within the mask
+    retval, labels, stats, _ = cv2.connectedComponentsWithStats(gs_mask.astype('uint8'), connectivity=8)
+    # reformatting stats output
+    indexes = stats[:,4].argsort()
+
+    component_indices = indexes[-retval:]   # Taking only the (# of retval) components
+    retained_component_indicies = [component_indices[i] for i in range(retval-1)] # 
+    labels[np.invert(np.isin(labels, retained_component_indicies))] = 0
+    binary_masks = [(labels == i+1).astype('uint8') for i in range(retval-1)]
+
+    masks = [mask[minbbox(mask)[1]:minbbox(mask)[3], minbbox(mask)[0]:minbbox(mask)[2]] for mask in binary_masks]
+    elements = [img[minbbox(mask)[1]:minbbox(mask)[3], minbbox(mask)[0]:minbbox(mask)[2]] for mask in binary_masks]
+    
     return elements, masks
 
 ##### Question 2 #####
@@ -154,13 +190,12 @@ def affine_insert(scene, element, elmask, eldepth, location, height,
     - out_depth: an updated depth map for the scene containing the element depth
         in all locations where the element appears.
     """
-
     # Rotating image according to the hyperparameter, angle
     element = im.rotate_bound(element, angle)
-    elmask = im.rotate_bound(elmask, angle)
+    elmask = im.rotate_bound(elmask.astype('float'), angle)
         
     # Getting element and background shape info
-    bkg_height, bkg_width, _ = scene.shape
+    bkg_height, bkg_width, _ = scene.shape  
     ele_height, ele_width, _ = element.shape
 
     # Scale the image
@@ -195,20 +230,31 @@ def affine_insert(scene, element, elmask, eldepth, location, height,
     bkg_y_end = min(bkg_height, top)
 
     # initialize composite image as the background
-    composite_img = scene.copy()
-  
-    # linear combination of the content and background
-    print(ele_x_start, ele_x_end, ele_y_start, ele_y_end)
-    print(bkg_x_start, bkg_x_end, bkg_y_start, bkg_y_end)
-    composite_img[bkg_y_start:bkg_y_end, bkg_x_start:bkg_x_end] = new_element[ele_y_start:ele_y_end, ele_x_start:ele_x_end] * new_elmask[ele_y_start:ele_y_end, ele_x_start:ele_x_end] + scene[bkg_y_start:bkg_y_end, bkg_x_start:bkg_x_end] * (1-new_elmask[ele_y_start:ele_y_end, ele_x_start:ele_x_end])
-    out_scene = composite_img
-
-    # Post processing out_scene based on depth data
-    if eldepth != None:
-        change_coords = scene_depth < eldepth        # Indices which the scene_depth is less than eldepth
-
-
+    out_scene = scene.copy()
     
+    # Checking scene_depth
+    if scene_depth is None:
+        scene_depth = np.full(scene.shape[:2], np.inf)
+
+    out_depth = scene_depth.copy()
+
+    # Specifying the element reigon and scene region
+    ele_region = new_element[ele_y_start:ele_y_end, ele_x_start:ele_x_end]
+    mask_region = new_elmask[ele_y_start:ele_y_end, ele_x_start:ele_x_end]
+    scene_region = out_scene[bkg_y_start:bkg_y_end, bkg_x_start:bkg_x_end]
+    scene_depth_reigon = scene_depth[bkg_y_start:bkg_y_end, bkg_x_start:bkg_x_end]
+
+    # Creating the composite image
+    bin_depth_mask = eldepth < scene_depth_reigon # bin_depth_mask is True where element should show up and False where background should show up
+    mask_region = mask_region[:,:,None] * bin_depth_mask[:,:,None]
+    ele_masked = ele_region * mask_region * alpha
+    scene_masked = scene_region * (1-mask_region)*alpha
+    out_scene[bkg_y_start:bkg_y_end, bkg_x_start:bkg_x_end]= ele_masked + scene_masked 
+
+    # Updating the depth map to only represent the insertion element
+    depth_mask = eldepth * mask_region
+    depth_mask[depth_mask == 0] = np.inf # setting the 0 depth pixels in the mask to infinity so they dont get detected in the min function
+    out_depth[bkg_y_start:bkg_y_end, bkg_x_start:bkg_x_end] = np.minimum(out_depth[bkg_y_start:bkg_y_end, bkg_x_start:bkg_x_end], depth_mask[:,:,0])
     return out_scene, out_depth
 
 ##### Question 3 #####
@@ -221,6 +267,25 @@ def custom_compose():
     Returns:
     - out_scene: a composite scene.
     """
+    bgname = '_1295'
+
+    d = loadmat('imgs/depth_maps/depth' + bgname + '.mat')
+    depth_map = d['dimg']
+    bckgrd = load_img('imgs/backgrounds/image' + bgname + '.png')
+
+    
+
+
+    elements, masks= green_extract('imgs/custom_imgs/josh_isaac.jpg')
+    elements1, masks1 = green_extract('imgs/custom_imgs/crouch.jpg')
+    crouch_im = elements1[0]
+    crouch_mask = masks1[0]
+    ji = elements[0]
+    ji_mask = masks[0]
+
+    scene, scene_depth = affine_insert(bckgrd, ji, ji_mask, 2.3, [0.1,0.2], 0.4, 90, depth_map)
+    scene2, scene_depth2 = affine_insert(scene, crouch_im, crouch_mask, 3.2, [0.65,0.40], 0.4, 10, scene_depth)
+    out_scene, _ = affine_insert(scene2, crouch_im, crouch_mask, 1.5, [0.5,0.6], 0.4, -30, scene_depth2)
 
 
     return out_scene
